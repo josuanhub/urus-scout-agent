@@ -1,7 +1,10 @@
 const express = require("express");
+const urusScoutRoutes = require("./routes/urus_scout.routes");
 
 const app = express();
+
 app.use(express.json({ limit: "1mb" }));
+app.use("/v1/urus_scout", urusScoutRoutes);
 
 app.get("/", async (req, res) => {
   return res.json({
