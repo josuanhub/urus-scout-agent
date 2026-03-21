@@ -1,5 +1,3 @@
-require("dotenv").config();
-
 const express = require("express");
 const urusScoutRoutes = require("./routes/urus_scout.routes");
 const moltbookPublishRoutes = require("./routes/moltbook_publish.routes");
