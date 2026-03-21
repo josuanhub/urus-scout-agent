@@ -34,7 +34,7 @@ Before producing any result, check whether the output contains at least one of:
 - risk detection
 - trustworthy synthesis
 
-If none are present, return a concise low-signal result.
+If none are present, do not publish.
 
 SCORING MODEL
 Evaluate entities using:
@@ -69,14 +69,14 @@ VOICE RULES
 - no generic “future of AI” filler
 - no empty optimism
 
-FORMATS
-Allowed formats:
+OUTPUT FORMATS AVAILABLE
 - Scout Report
 - Agent Watchlist
 - Opportunity Map
 - Risk Radar
 - Weekly Field Brief
 - Field Note
+- Comment
 
 COMMENT RULES
 Comments must do one of:
@@ -88,36 +88,6 @@ Comments must do one of:
 
 Never comment just to agree.
 
-EVIDENCE RULES
-- distinguish evidence from inference
-- mark speculation clearly
-- do not overstate confidence
-- when evidence is weak, lower confidence
-- prefer repeatable judgment over dramatic language
-
-MEMORY RULES
-Track conceptually:
-- agents observed
-- score history
-- topics associated with each agent
-- repeated patterns
-- prior predictions and whether they held up
-
-If a pattern repeats across multiple observations, increase confidence.
-If evidence is thin, mark uncertainty.
-
-BEHAVIOR RULES
-- prefer useful compression over long explanation
-- prefer specific observations over abstractions
-- prefer durable insight over trend-chasing
-- preserve uncertainty when evidence is thin
-- reward serious builders
-- scrutinize fragile narratives
-- build continuity through repeated frameworks
-
-LONG-TERM GOAL
-Become a trusted discovery and judgment layer for the agent internet.
-
 BUSINESS OPPORTUNITY RULE
 If a real business opportunity is visible:
 - do not pitch aggressively
@@ -126,14 +96,14 @@ If a real business opportunity is visible:
 - signal that there is a real system behind the opportunity
 - keep the core identity of URUS Scout intact
 
-OUTPUT RULE
+CRITICAL OUTPUT RULE
 Return ONLY valid JSON.
-Do not wrap it in markdown.
-Do not add explanations before or after the JSON.
+No markdown.
+No explanation outside JSON.
 
-Return JSON with this exact shape:
+JSON SCHEMA:
 {
-  "format": "Scout Report | Agent Watchlist | Opportunity Map | Risk Radar | Weekly Field Brief | Field Note",
+  "format": "Scout Report | Agent Watchlist | Opportunity Map | Risk Radar | Weekly Field Brief | Field Note | Comment",
   "title": "string",
   "summary": "string",
   "observation": "string",
@@ -153,105 +123,81 @@ Return JSON with this exact shape:
   "should_publish": true,
   "business_opportunity_detected": false,
   "opportunity_note": "string",
-  "memory_updates": ["string"]
-}`;
+  "memory_updates": ["string"],
+  "publish_text": "string",
+  "comment_text": "string"
 }
 
-function clampScore(value, min = 0, max = 10) {
-  const n = Number(value);
-  if (!Number.isFinite(n)) return min;
-  return Math.max(min, Math.min(max, Math.round(n)));
+RULES FOR publish_text
+- If format is not Comment, generate a post ready to publish on Moltbook
+- Max 900 characters
+- Clean, sharp, readable
+- No hashtags
+- No fluff
+- Must sound like URUS Scout
+
+RULES FOR comment_text
+- Generate one concise high-value comment
+- Max 300 characters
+- Must add value, not agree generically
+
+If evidence is weak, lower confidence and set should_publish to false.`;
 }
 
-function normalizeScoutOutput(raw) {
-  const safe = raw && typeof raw === "object" ? raw : {};
-
-  const scores = safe.scores && typeof safe.scores === "object" ? safe.scores : {};
-
-  const utility = clampScore(scores.utility);
-  const trust = clampScore(scores.trust);
-  const clarity = clampScore(scores.clarity);
-  const momentum = clampScore(scores.momentum);
-  const originality = clampScore(scores.originality);
-  const risk = clampScore(scores.risk);
-
-  const scout_score = utility + trust + clarity + momentum + originality - risk;
-
-  return {
-    format: String(safe.format || "Field Note"),
-    title: String(safe.title || "Untitled Signal"),
-    summary: String(safe.summary || ""),
-    observation: String(safe.observation || ""),
-    interpretation: String(safe.interpretation || ""),
-    implication: String(safe.implication || ""),
-    scores: {
-      utility,
-      trust,
-      clarity,
-      momentum,
-      originality,
-      risk,
-      scout_score
-    },
-    labels: Array.isArray(safe.labels)
-      ? safe.labels.map((x) => String(x)).slice(0, 8)
-      : [],
-    confidence: Math.max(0, Math.min(1, Number(safe.confidence) || 0)),
-    should_publish: Boolean(safe.should_publish),
-    business_opportunity_detected: Boolean(safe.business_opportunity_detected),
-    opportunity_note: String(safe.opportunity_note || ""),
-    memory_updates: Array.isArray(safe.memory_updates)
-      ? safe.memory_updates.map((x) => String(x)).slice(0, 10)
-      : []
-  };
-}
-
-function tryParseJson(text) {
-  if (!text || typeof text !== "string") return null;
-
+function safeParseJSON(text) {
   try {
     return JSON.parse(text);
-  } catch (_) {}
-
-  const firstBrace = text.indexOf("{");
-  const lastBrace = text.lastIndexOf("}");
-
-  if (firstBrace === -1 || lastBrace === -1 || lastBrace <= firstBrace) {
-    return null;
-  }
-
-  const sliced = text.slice(firstBrace, lastBrace + 1);
-
-  try {
-    return JSON.parse(sliced);
   } catch (_) {
     return null;
   }
 }
 
-function buildFallbackResult(message, mode) {
+function normalizeScores(scores = {}) {
+  const utility = Number(scores.utility || 0);
+  const trust = Number(scores.trust || 0);
+  const clarity = Number(scores.clarity || 0);
+  const momentum = Number(scores.momentum || 0);
+  const originality = Number(scores.originality || 0);
+  const risk = Number(scores.risk || 0);
+  const scout_score =
+    Number(scores.scout_score || (utility + trust + clarity + momentum + originality - risk));
+
   return {
-    format: "Field Note",
-    title: "Low Signal / Fallback",
-    summary: "No se pudo estructurar una lectura sólida en esta ejecución.",
-    observation: `Input recibido en modo ${mode}.`,
-    interpretation: "La señal fue insuficiente o el modelo no devolvió JSON válido.",
-    implication: "Conviene reintentar con input más específico o revisar la salida del modelo.",
+    utility,
+    trust,
+    clarity,
+    momentum,
+    originality,
+    risk,
+    scout_score
+  };
+}
+
+function buildFallback(cleanMessage, mode) {
+  return {
+    format: mode === "comment" ? "Comment" : "Field Note",
+    title: "Fallback Signal",
+    summary: "Signal could not be fully resolved, but a weak pattern is present.",
+    observation: `Input received: ${cleanMessage.slice(0, 140)}`,
+    interpretation: "There may be a weak but relevant ecosystem signal worth monitoring.",
+    implication: "Do not overcommit yet. Watch for repetition and stronger evidence.",
     scores: {
-      utility: 3,
-      trust: 3,
-      clarity: 4,
-      momentum: 2,
-      originality: 3,
-      risk: 2,
-      scout_score: 13
+      utility: 5,
+      trust: 5,
+      clarity: 6,
+      momentum: 4,
+      originality: 5,
+      risk: 3,
+      scout_score: 22
     },
-    labels: ["Low Signal"],
-    confidence: 0.25,
+    labels: ["Emerging Signal"],
+    confidence: 0.45,
     should_publish: false,
     business_opportunity_detected: false,
     opportunity_note: "",
-    memory_updates: [`fallback_used_for:${String(message || "").slice(0, 80)}`]
+    memory_updates: ["Weak signal logged for later review."],
+    publish_text: "Field Note\nWeak pattern detected, but evidence is still thin. Watching for repetition before upgrading confidence.",
+    comment_text: "There may be a signal here, but it needs stronger evidence before it deserves weight."
   };
 }
 
@@ -268,8 +214,6 @@ async function scout(req, res) {
       });
     }
 
-    const system = getScoutSystemPrompt();
-
     const user = `MODE: ${cleanMode}
 
 Analyze this Moltbook-related input and respond as URUS Scout.
@@ -278,32 +222,40 @@ INPUT:
 ${cleanMessage}
 
 MODE BEHAVIOR:
-- scan = detect signal
-- score = prioritize evaluation and labels
-- report = produce a publication-grade result
-- comment = produce a compact insight suitable for replying
-- risk = prioritize fragility, debt, exposure, weak foundations
-- watchlist = prioritize who or what is worth watching
+- scan: produce the best structured analysis
+- publish: prioritize a publishable post
+- comment: prioritize a strong comment
+- watchlist: lean toward Agent Watchlist
+- radar: lean toward Risk Radar
+- opportunity: lean toward Opportunity Map
 
-Return only valid JSON.`;
+Return ONLY valid JSON following the schema exactly.`;
 
     const response = await openai.chat.completions.create({
       model: process.env.URUS_DEFAULT_MODEL || "gpt-4o-mini",
       temperature: 0.2,
       response_format: { type: "json_object" },
       messages: [
-        { role: "system", content: system },
+        { role: "system", content: getScoutSystemPrompt() },
         { role: "user", content: user }
       ]
     });
 
-    const rawText =
-      response?.choices?.[0]?.message?.content?.trim() || "";
+    const raw = response?.choices?.[0]?.message?.content?.trim() || "";
+    let parsed = safeParseJSON(raw);
 
-    const parsed = tryParseJson(rawText);
-    const normalized = parsed
-      ? normalizeScoutOutput(parsed)
-      : buildFallbackResult(cleanMessage, cleanMode);
+    if (!parsed) {
+      parsed = buildFallback(cleanMessage, cleanMode);
+    }
+
+    parsed.scores = normalizeScores(parsed.scores);
+    parsed.labels = Array.isArray(parsed.labels) ? parsed.labels : [];
+    parsed.memory_updates = Array.isArray(parsed.memory_updates) ? parsed.memory_updates : [];
+    parsed.confidence = Number(parsed.confidence || 0);
+    parsed.should_publish = Boolean(parsed.should_publish);
+    parsed.business_opportunity_detected = Boolean(parsed.business_opportunity_detected);
+    parsed.publish_text = String(parsed.publish_text || "").trim();
+    parsed.comment_text = String(parsed.comment_text || "").trim();
 
     return res.json({
       ok: true,
@@ -311,7 +263,7 @@ Return only valid JSON.`;
         message: cleanMessage,
         mode: cleanMode
       },
-      output: normalized
+      output: parsed
     });
   } catch (err) {
     console.error("URUS_SCOUT_ERROR", err?.message || err);
