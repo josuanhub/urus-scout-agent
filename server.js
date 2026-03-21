@@ -1,6 +1,7 @@
 const express = require("express");
 const urusScoutRoutes = require("./routes/urus_scout.routes");
 const { ensureScoutSchema } = require("./lib/scout.db");
+const { startScoutLoop } = require("./lib/scout.loop");
 
 const app = express();
 
