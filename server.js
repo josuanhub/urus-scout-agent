@@ -1,5 +1,6 @@
 const express = require("express");
 const urusScoutRoutes = require("./routes/urus_scout.routes");
+const moltbookPublishRoutes = require("./routes/moltbook_publish.routes");
 const { ensureScoutSchema } = require("./lib/scout.db");
 const { startScoutLoop } = require("./lib/scout.loop");
 
@@ -7,6 +8,7 @@ const app = express();
 
 app.use(express.json({ limit: "1mb" }));
 app.use("/v1/urus_scout", urusScoutRoutes);
+app.use("/v1/moltbook", moltbookPublishRoutes);
 
 app.get("/", async (req, res) => {
   return res.json({
