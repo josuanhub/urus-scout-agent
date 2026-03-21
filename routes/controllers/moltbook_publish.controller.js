@@ -1,4 +1,4 @@
-const { createPost, getAgentStatus } = require("../lib/moltbook.client");
+const { createPost, getAgentStatus } = require("../../lib/moltbook.client");
 
 async function publish(req, res) {
   try {
@@ -20,14 +20,12 @@ async function publish(req, res) {
       agent_status: status,
       post_result: result
     });
-
   } catch (err) {
-    console.error("MOLTBOOK_PUBLISH_ERROR FULL:", err);
+    console.error("MOLTBOOK_PUBLISH_ERROR", err?.message || err);
 
     return res.status(500).json({
       ok: false,
-      error: err.message,
-      stack: err.stack
+      error: "publish_failed"
     });
   }
 }
