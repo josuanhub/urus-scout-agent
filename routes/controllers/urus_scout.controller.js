@@ -1,4 +1,11 @@
 const OpenAI = require("openai").default;
+const crypto = require("crypto");
+const {
+  insertScoutRun,
+  upsertScoutMemory,
+  getRecentScoutRuns,
+  getRecentScoutMemory
+} = require("../../lib/scout.db");
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY
@@ -128,19 +135,6 @@ JSON SCHEMA:
   "comment_text": "string"
 }
 
-RULES FOR publish_text
-- If format is not Comment, generate a post ready to publish on Moltbook
-- Max 900 characters
-- Clean, sharp, readable
-- No hashtags
-- No fluff
-- Must sound like URUS Scout
-
-RULES FOR comment_text
-- Generate one concise high-value comment
-- Max 300 characters
-- Must add value, not agree generically
-
 If evidence is weak, lower confidence and set should_publish to false.`;
 }
 
@@ -201,20 +195,55 @@ function buildFallback(cleanMessage, mode) {
   };
 }
 
-async function scout(req, res) {
-  try {
-    const { message = "", mode = "scan" } = req.body || {};
-    const cleanMessage = String(message || "").trim();
-    const cleanMode = String(mode || "scan").trim().toLowerCase();
+function hashKey(input) {
+  return crypto.createHash("md5").update(String(input)).digest("hex");
+}
 
-    if (!cleanMessage) {
-      return res.status(400).json({
-        ok: false,
-        error: "empty_message"
+async function persistScoutOutput({ mode, inputText, output }) {
+  await insertScoutRun({
+    mode,
+    inputText,
+    output
+  });
+
+  if (Array.isArray(output.memory_updates)) {
+    for (const note of output.memory_updates) {
+      const cleanNote = String(note || "").trim();
+      if (!cleanNote) continue;
+
+      await upsertScoutMemory({
+        memoryKey: `note:${hashKey(cleanNote)}`,
+        kind: "note",
+        payload: {
+          note: cleanNote,
+          last_input: inputText,
+          updated_from_mode: mode
+        }
       });
     }
+  }
 
-    const user = `MODE: ${cleanMode}
+  if (output.business_opportunity_detected) {
+    await upsertScoutMemory({
+      memoryKey: `opportunity:${hashKey(inputText)}`,
+      kind: "opportunity",
+      payload: {
+        input: inputText,
+        title: output.title || "",
+        opportunity_note: output.opportunity_note || "",
+        labels: output.labels || [],
+        scores: output.scores || {},
+        publish_text: output.publish_text || ""
+      }
+    });
+  }
+}
+
+async function runScoutCore({ message, mode = "scan" }) {
+  const cleanMessage = String(message || "").trim();
+  const cleanMode = String(mode || "scan").trim().toLowerCase();
+
+  const user = `MODE: ${cleanMode}
 
 Analyze this Moltbook-related input and respond as URUS Scout.
 
@@ -231,31 +260,58 @@ MODE BEHAVIOR:
 
 Return ONLY valid JSON following the schema exactly.`;
 
-    const response = await openai.chat.completions.create({
-      model: process.env.URUS_DEFAULT_MODEL || "gpt-4o-mini",
-      temperature: 0.2,
-      response_format: { type: "json_object" },
-      messages: [
-        { role: "system", content: getScoutSystemPrompt() },
-        { role: "user", content: user }
-      ]
-    });
+  const response = await openai.chat.completions.create({
+    model: process.env.URUS_DEFAULT_MODEL || "gpt-4o-mini",
+    temperature: 0.2,
+    response_format: { type: "json_object" },
+    messages: [
+      { role: "system", content: getScoutSystemPrompt() },
+      { role: "user", content: user }
+    ]
+  });
 
-    const raw = response?.choices?.[0]?.message?.content?.trim() || "";
-    let parsed = safeParseJSON(raw);
+  const raw = response?.choices?.[0]?.message?.content?.trim() || "";
+  let parsed = safeParseJSON(raw);
 
-    if (!parsed) {
-      parsed = buildFallback(cleanMessage, cleanMode);
+  if (!parsed) {
+    parsed = buildFallback(cleanMessage, cleanMode);
+  }
+
+  parsed.scores = normalizeScores(parsed.scores);
+  parsed.labels = Array.isArray(parsed.labels) ? parsed.labels : [];
+  parsed.memory_updates = Array.isArray(parsed.memory_updates) ? parsed.memory_updates : [];
+  parsed.confidence = Number(parsed.confidence || 0);
+  parsed.should_publish = Boolean(parsed.should_publish);
+  parsed.business_opportunity_detected = Boolean(parsed.business_opportunity_detected);
+  parsed.publish_text = String(parsed.publish_text || "").trim();
+  parsed.comment_text = String(parsed.comment_text || "").trim();
+
+  await persistScoutOutput({
+    mode: cleanMode,
+    inputText: cleanMessage,
+    output: parsed
+  });
+
+  return parsed;
+}
+
+async function scout(req, res) {
+  try {
+    const { message = "", mode = "scan" } = req.body || {};
+    const cleanMessage = String(message || "").trim();
+    const cleanMode = String(mode || "scan").trim().toLowerCase();
+
+    if (!cleanMessage) {
+      return res.status(400).json({
+        ok: false,
+        error: "empty_message"
+      });
     }
 
-    parsed.scores = normalizeScores(parsed.scores);
-    parsed.labels = Array.isArray(parsed.labels) ? parsed.labels : [];
-    parsed.memory_updates = Array.isArray(parsed.memory_updates) ? parsed.memory_updates : [];
-    parsed.confidence = Number(parsed.confidence || 0);
-    parsed.should_publish = Boolean(parsed.should_publish);
-    parsed.business_opportunity_detected = Boolean(parsed.business_opportunity_detected);
-    parsed.publish_text = String(parsed.publish_text || "").trim();
-    parsed.comment_text = String(parsed.comment_text || "").trim();
+    const output = await runScoutCore({
+      message: cleanMessage,
+      mode: cleanMode
+    });
 
     return res.json({
       ok: true,
@@ -263,7 +319,7 @@ Return ONLY valid JSON following the schema exactly.`;
         message: cleanMessage,
         mode: cleanMode
       },
-      output: parsed
+      output
     });
   } catch (err) {
     console.error("URUS_SCOUT_ERROR", err?.message || err);
@@ -275,6 +331,29 @@ Return ONLY valid JSON following the schema exactly.`;
   }
 }
 
+async function status(req, res) {
+  try {
+    const runs = await getRecentScoutRuns(10);
+    const memory = await getRecentScoutMemory(20);
+
+    return res.json({
+      ok: true,
+      status: "online",
+      recent_runs: runs,
+      recent_memory: memory
+    });
+  } catch (err) {
+    console.error("URUS_SCOUT_STATUS_ERROR", err?.message || err);
+
+    return res.status(500).json({
+      ok: false,
+      error: "status_failed"
+    });
+  }
+}
+
 module.exports = {
-  scout
+  scout,
+  status,
+  runScoutCore
 };
