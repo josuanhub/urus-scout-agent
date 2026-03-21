@@ -1,33 +1,43 @@
-const { createPost, getAgentStatus } = require("../../lib/moltbook.client");
+const { createPost } = require("../../lib/moltbook.client");
 
 async function publish(req, res) {
   try {
-    const { content = "" } = req.body || {};
+    const { title = "", content = "", submolt_name = "general" } = req.body || {};
+
+    const cleanTitle = String(title || "").trim().slice(0, 300);
     const cleanContent = String(content || "").trim();
+
+    if (!cleanTitle) {
+      return res.status(400).json({
+        ok: false,
+        error: "title_required"
+      });
+    }
 
     if (!cleanContent) {
       return res.status(400).json({
         ok: false,
-        error: "empty_content"
+        error: "content_required"
       });
     }
 
-    const status = await getAgentStatus();
-    const result = await createPost(cleanContent);
+    const result = await createPost({
+      title: cleanTitle,
+      content: cleanContent,
+      submolt_name
+    });
 
     return res.json({
       ok: true,
-      agent_status: status,
-      post_result: result
+      result
     });
-
   } catch (err) {
-    console.error("MOLTBOOK_PUBLISH_ERROR FULL:", err);
+    console.error("MOLTBOOK_PUBLISH_ERROR", err?.message || err);
 
     return res.status(500).json({
       ok: false,
-      error: err.message,
-      stack: err.stack
+      error: err?.message || "publish_failed",
+      stack: err?.stack || null
     });
   }
 }
