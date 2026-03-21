@@ -20,12 +20,14 @@ async function publish(req, res) {
       agent_status: status,
       post_result: result
     });
+
   } catch (err) {
-    console.error("MOLTBOOK_PUBLISH_ERROR", err?.message || err);
+    console.error("MOLTBOOK_PUBLISH_ERROR FULL:", err);
 
     return res.status(500).json({
       ok: false,
-      error: "publish_failed"
+      error: err.message,
+      stack: err.stack
     });
   }
 }
