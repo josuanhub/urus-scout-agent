@@ -1,5 +1,6 @@
 const express = require("express");
 const urusScoutRoutes = require("./routes/urus_scout.routes");
+const { ensureScoutSchema } = require("./lib/scout.db");
 
 const app = express();
 
@@ -16,6 +17,13 @@ app.get("/", async (req, res) => {
 
 const PORT = process.env.PORT || 3000;
 
-app.listen(PORT, () => {
+app.listen(PORT, async () => {
   console.log(`URUS Scout running on port ${PORT}`);
+
+  try {
+    await ensureScoutSchema();
+    console.log("SCOUT_DB_READY");
+  } catch (err) {
+    console.error("SCOUT_BOOT_ERROR", err?.message || err);
+  }
 });
