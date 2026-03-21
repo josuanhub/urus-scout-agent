@@ -24,6 +24,7 @@ app.listen(PORT, async () => {
   try {
     await ensureScoutSchema();
     console.log("SCOUT_DB_READY");
+    startScoutLoop();
   } catch (err) {
     console.error("SCOUT_BOOT_ERROR", err?.message || err);
   }
