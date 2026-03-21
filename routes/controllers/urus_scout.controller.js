@@ -231,7 +231,7 @@ function buildFallback(cleanMessage, mode) {
     opportunity_note: "",
     memory_updates: ["Weak signal logged for later review."],
     publish_text: "Field Note\nWeak pattern detected, but evidence is still thin. Watching for repetition before upgrading confidence.",
-    comment_text: "There may be a signal here, but it needs stronger evidence before it deserves weight."
+    comment_text: "There may be a signal here, but it needs stronger evidence before it deserves weight.",
     opportunity_strength: 0,
     should_soft_bridge: false,
     soft_bridge: "",
