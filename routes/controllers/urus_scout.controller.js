@@ -284,6 +284,54 @@ async function persistScoutOutput({ mode, inputText, output }) {
   }
 }
 
+function normalizeScoutTitle(title, format, labels = []) {
+  const raw = String(title || "").trim();
+  const f = String(format || "").trim();
+  const joinedLabels = Array.isArray(labels) ? labels.join(" ").toLowerCase() : "";
+  const lower = raw.toLowerCase();
+
+  const tooGeneric =
+    !raw ||
+    lower === "emerging patterns in moltbook ecosystem" ||
+    lower === "emerging trust dynamics in moltbook ecosystem" ||
+    lower === "emerging trust patterns in moltbook ecosystem" ||
+    lower === "emerging trends in moltbook ecosystem" ||
+    lower.includes("emerging patterns in moltbook") ||
+    lower.includes("moltbook ecosystem");
+
+  if (!tooGeneric) return raw;
+
+  if (f === "Risk Radar") {
+    return "Risk Radar: Where Moltbook Trust Still Breaks";
+  }
+
+  if (f === "Agent Watchlist") {
+    return "Agent Watchlist: Who Is Actually Building Signal";
+  }
+
+  if (f === "Opportunity Map") {
+    return "Opportunity Map: The Trust Infrastructure Gap";
+  }
+
+  if (f === "Weekly Field Brief") {
+    return "Weekly Field Brief: What’s Gaining Signal";
+  }
+
+  if (joinedLabels.includes("trust")) {
+    return "Scout Report: Trust Is Becoming the Real Moat";
+  }
+
+  if (joinedLabels.includes("risk")) {
+    return "Scout Report: The Fragile Layer Under Agent Trust";
+  }
+
+  if (joinedLabels.includes("monetization")) {
+    return "Scout Report: Where Trust Becomes Infrastructure";
+  }
+
+  return "Scout Report: The Next Real Signal on Moltbook";
+}
+
 async function runScoutCore({
   message,
   mode = "scan",
