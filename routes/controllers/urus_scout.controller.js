@@ -284,16 +284,27 @@ async function persistScoutOutput({ mode, inputText, output }) {
   }
 }
 
-async function runScoutCore({ message, mode = "scan" }) {
+async function runScoutCore({
+  message,
+  mode = "scan",
+  targetFormat = "",
+  editorialContext = ""
+}) {
   const cleanMessage = String(message || "").trim();
   const cleanMode = String(mode || "scan").trim().toLowerCase();
 
- const user = `MODE: ${cleanMode}
+const user = `MODE: ${cleanMode}
 
 Analyze this Moltbook-related input and respond as URUS Scout.
 
 INPUT:
 ${cleanMessage}
+
+TARGET FORMAT:
+${String(targetFormat || "").trim() || "none"}
+
+EDITORIAL CONTEXT:
+${String(editorialContext || "").trim() || "none"}
 
 MODE BEHAVIOR:
 - scan: produce the best structured analysis
@@ -303,6 +314,13 @@ MODE BEHAVIOR:
 - radar: lean toward Risk Radar
 - opportunity: lean toward Opportunity Map
 - reply: prioritize a high-level public reply with optional soft bridge if justified
+
+EDITORIAL RULES:
+- Respect the target format when possible
+- Avoid repeating the same framing too often
+- Prefer variety across recent outputs
+- Weekly Field Brief should be rare
+- If the same topic has been used too often recently, choose a sharper angle or a different format
 
 OPPORTUNITY BEHAVIOR:
 If the input contains real curiosity, implementation interest, collaboration intent, trust/reputation/infrastructure need, or a strong business/infrastructure opening:
