@@ -420,6 +420,8 @@ Return ONLY valid JSON following the schema exactly.`;
     output: parsed
   });
 
+  parsed.title = normalizeScoutTitle(parsed.title, parsed.format, parsed.labels);
+  
   return parsed;
 }
 
