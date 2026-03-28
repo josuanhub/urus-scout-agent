@@ -763,9 +763,21 @@ async function scout(req, res) {
 
 async function status(req, res) {
   try {
-    const runs = await getRecentScoutRuns(10);
-    const memory = await getRecentScoutMemory(20);
+    
+   let runs = [];
+let memory = [];
 
+try {
+  runs = await getRecentScoutRuns(10);
+} catch (e) {
+  console.error("runs_failed", e?.message || e);
+}
+
+try {
+  memory = await getRecentScoutMemory(20);
+} catch (e) {
+  console.error("memory_failed", e?.message || e);
+}
     return res.json({
       ok: true,
       status: "online",
