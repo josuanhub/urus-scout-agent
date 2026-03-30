@@ -7,6 +7,12 @@ const {
   getRecentScoutMemory
 } = require("../../lib/scout.db");
 
+// 🔥 helper para detectar agente desde input
+function extractAgentFromInput(input) {
+  const match = input.match(/u\/([a-zA-Z0-9_-]+)/);
+  return match ? match[1] : "ecosystem";
+}
+
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY
 });
