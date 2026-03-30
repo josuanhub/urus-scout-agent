@@ -797,32 +797,29 @@ try {
 async function leaderboard(req, res) {
   try {
     const memory = await getRecentScoutMemory(500);
+
     await upsertScoutMemory({
-  memoryKey: `agent_score:test_manual:${Date.now()}`,
-  kind: "agent_score",
-  payload: {
-    author: "test_manual",
-    score: { scout_score: 30 },
-    ts: new Date().toISOString()
-  }
-});
+      memoryKey: `agent_score:test_manual:${Date.now()}`,
+      kind: "agent_score",
+      payload: {
+        author: "test_manual",
+        score: { scout_score: 30 },
+        ts: new Date().toISOString()
+      }
+    });
+
     const agentMap = {};
 
     for (const row of memory) {
       const key = row.memoryKey || row.memory_key;
+      if (!key || !key.startsWith("agent_score:")) continue;
 
-if (!key || !key.startsWith("agent_score:")) continue;
-      
       const payload = row.payload || row.data || {};
       const agent = payload.author;
-
       if (!agent) continue;
 
       if (!agentMap[agent]) {
-        agentMap[agent] = {
-          total: 0,
-          count: 0
-        };
+        agentMap[agent] = { total: 0, count: 0 };
       }
 
       const score = Number(payload?.score?.scout_score || 0);
@@ -831,32 +828,40 @@ if (!key || !key.startsWith("agent_score:")) continue;
       agentMap[agent].count += 1;
     }
 
-    const leaderboard = Object.entries(agentMap).map(([agent, data]) => {
-  const avg = data.total / data.count;
+    const leaderboard = Object.entries(agentMap)
+      .map(([agent, data]) => {
+        const avg = data.total / data.count;
+        const consistency = Math.min(data.count / 5, 1);
+        const dominance_score = avg * (0.7 + consistency * 0.3);
 
-  // 🔥 NUEVO: consistencia
-  const consistency = Math.min(data.count / 5, 1);
+        let classification = "NOISE";
+        if (dominance_score >= 30) classification = "HIGH_SIGNAL";
+        else if (dominance_score >= 20) classification = "MID_SIGNAL";
 
-  // 🔥 NUEVO: dominance score real
-  const dominance_score = avg * (0.7 + consistency * 0.3);
-
-  let classification = "NOISE";
-  if (dominance_score >= 30) classification = "HIGH_SIGNAL";
-  else if (dominance_score >= 20) classification = "MID_SIGNAL";
-
-  return {
-    agent,
-    avg_score: Number(avg.toFixed(2)),
-    interactions: data.count,
-    dominance_score: Number(dominance_score.toFixed(2)),
-    classification
-  };
-}).sort((a, b) => b.dominance_score - a.dominance_score);
+        return {
+          agent,
+          avg_score: Number(avg.toFixed(2)),
+          interactions: data.count,
+          dominance_score: Number(dominance_score.toFixed(2)),
+          classification
+        };
+      })
+      .sort((a, b) => b.dominance_score - a.dominance_score);
 
     return res.json({
       ok: true,
       leaderboard
     });
+
+  } catch (err) {
+    console.error("LEADERBOARD_ERROR", err?.message || err);
+
+    return res.status(500).json({
+      ok: false,
+      error: "leaderboard_failed"
+    });
+  }
+}
 
 async function topAgents(req, res) {
   try {
