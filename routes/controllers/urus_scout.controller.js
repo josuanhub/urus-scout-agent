@@ -794,8 +794,68 @@ try {
   }
 }
 
+async function leaderboard(req, res) {
+  try {
+    const memory = await getRecentScoutMemory(500);
+
+    const agentMap = {};
+
+    for (const row of memory) {
+      if (!row?.memoryKey?.startsWith("agent_score:")) continue;
+
+      const payload = row.payload || {};
+      const agent = payload.author;
+
+      if (!agent) continue;
+
+      if (!agentMap[agent]) {
+        agentMap[agent] = {
+          total: 0,
+          count: 0
+        };
+      }
+
+      const score = Number(payload?.score?.scout_score || 0);
+
+      agentMap[agent].total += score;
+      agentMap[agent].count += 1;
+    }
+
+    const leaderboard = Object.entries(agentMap).map(([agent, data]) => {
+      const avg = data.total / data.count;
+
+      let classification = "NOISE";
+      if (avg >= 30) classification = "HIGH_SIGNAL";
+      else if (avg >= 20) classification = "MID_SIGNAL";
+
+      return {
+        agent,
+        avg_score: Number(avg.toFixed(2)),
+        interactions: data.count,
+        classification
+      };
+    });
+
+    leaderboard.sort((a, b) => b.avg_score - a.avg_score);
+
+    return res.json({
+      ok: true,
+      leaderboard
+    });
+
+  } catch (err) {
+    console.error("LEADERBOARD_ERROR", err?.message || err);
+
+    return res.status(500).json({
+      ok: false,
+      error: "leaderboard_failed"
+    });
+  }
+}
+
 module.exports = {
   scout,
   status,
+  leaderboard,
   runScoutCore
 };
