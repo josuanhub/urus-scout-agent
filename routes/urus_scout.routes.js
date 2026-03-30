@@ -5,6 +5,8 @@ const { scout, status, leaderboard } = require("./controllers/urus_scout.control
 
 router.post("/scout", scout);
 router.get("/status", status);
+
+// 👇 ESTE ES EL NUEVO
 router.get("/leaderboard", leaderboard);
 
 module.exports = router;
