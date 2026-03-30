@@ -832,21 +832,26 @@ if (!key || !key.startsWith("agent_score:")) continue;
     }
 
     const leaderboard = Object.entries(agentMap).map(([agent, data]) => {
-      const avg = data.total / data.count;
+  const avg = data.total / data.count;
 
-      let classification = "NOISE";
-      if (avg >= 30) classification = "HIGH_SIGNAL";
-      else if (avg >= 20) classification = "MID_SIGNAL";
+  // 🔥 NUEVO: consistencia
+  const consistency = Math.min(data.count / 5, 1);
 
-      return {
-        agent,
-        avg_score: Number(avg.toFixed(2)),
-        interactions: data.count,
-        classification
-      };
-    });
+  // 🔥 NUEVO: dominance score real
+  const dominance_score = avg * (0.7 + consistency * 0.3);
 
-    leaderboard.sort((a, b) => b.avg_score - a.avg_score);
+  let classification = "NOISE";
+  if (dominance_score >= 30) classification = "HIGH_SIGNAL";
+  else if (dominance_score >= 20) classification = "MID_SIGNAL";
+
+  return {
+    agent,
+    avg_score: Number(avg.toFixed(2)),
+    interactions: data.count,
+    dominance_score: Number(dominance_score.toFixed(2)),
+    classification
+  };
+}).sort((a, b) => b.dominance_score - a.dominance_score);
 
     return res.json({
       ok: true,
