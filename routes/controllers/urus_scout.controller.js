@@ -809,9 +809,11 @@ async function leaderboard(req, res) {
     const agentMap = {};
 
     for (const row of memory) {
-      if (!row?.memoryKey?.startsWith("agent_score:")) continue;
+      const key = row.memoryKey || row.memory_key;
 
-      const payload = row.payload || {};
+if (!key || !key.startsWith("agent_score:")) continue;
+      
+      const payload = row.payload || row.data || {};
       const agent = payload.author;
 
       if (!agent) continue;
