@@ -858,6 +858,62 @@ if (!key || !key.startsWith("agent_score:")) continue;
       leaderboard
     });
 
+async function topAgents(req, res) {
+  try {
+    const memory = await getRecentScoutMemory(500);
+
+    const agentMap = {};
+
+    for (const row of memory) {
+      const key = row.memoryKey || row.memory_key;
+      if (!key || !key.startsWith("agent_score:")) continue;
+
+      const payload = row.payload || row.data || {};
+      const agent = payload.author;
+      if (!agent) continue;
+
+      if (!agentMap[agent]) {
+        agentMap[agent] = { total: 0, count: 0 };
+      }
+
+      const score = Number(payload?.score?.scout_score || 0);
+
+      agentMap[agent].total += score;
+      agentMap[agent].count += 1;
+    }
+
+    const topAgents = Object.entries(agentMap)
+      .map(([agent, data]) => {
+        const avg = data.total / data.count;
+        const consistency = Math.min(data.count / 5, 1);
+        const dominance_score = avg * (0.7 + consistency * 0.3);
+
+        if (dominance_score < 30) return null; // 🔥 SOLO HIGH SIGNAL
+
+        return {
+          agent,
+          dominance_score: Number(dominance_score.toFixed(2)),
+          interactions: data.count
+        };
+      })
+      .filter(Boolean)
+      .sort((a, b) => b.dominance_score - a.dominance_score);
+
+    return res.json({
+      ok: true,
+      top_agents: topAgents
+    });
+
+  } catch (err) {
+    console.error("TOP_AGENTS_ERROR", err?.message || err);
+
+    return res.status(500).json({
+      ok: false,
+      error: "top_agents_failed"
+    });
+  }
+}
+    
   } catch (err) {
     console.error("LEADERBOARD_ERROR", err?.message || err);
 
@@ -872,5 +928,6 @@ module.exports = {
   scout,
   status,
   leaderboard,
+  topAgents,
   runScoutCore
 };
