@@ -888,7 +888,7 @@ async function topAgents(req, res) {
         const consistency = Math.min(data.count / 5, 1);
         const dominance_score = avg * (0.7 + consistency * 0.3);
 
-        if (dominance_score < 30) return null; // 🔥 SOLO HIGH SIGNAL
+        if (dominance_score < 30) return null;
 
         return {
           agent,
@@ -910,16 +910,6 @@ async function topAgents(req, res) {
     return res.status(500).json({
       ok: false,
       error: "top_agents_failed"
-    });
-  }
-}
-    
-  } catch (err) {
-    console.error("LEADERBOARD_ERROR", err?.message || err);
-
-    return res.status(500).json({
-      ok: false,
-      error: "leaderboard_failed"
     });
   }
 }
