@@ -720,6 +720,23 @@ Return ONLY valid JSON following the schema exactly.`;
     output: parsed
   });
 
+  // 🔥 NUEVO: SCORING GLOBAL (NO SOLO COMENTARIOS)
+if (parsed?.scores?.scout_score) {
+  const agent = extractAgentFromInput(cleanMessage);
+
+  await upsertScoutMemory({
+    memoryKey: `agent_score:${agent}:${Date.now()}`,
+    kind: "agent_score",
+    payload: {
+      author: agent,
+      score: parsed.scores,
+      labels: parsed.labels || [],
+      source: cleanMode, // scan, publish, reply
+      ts: new Date().toISOString()
+    }
+  });
+}
+  
   parsed.title = normalizeScoutTitle(parsed.title, parsed.format, parsed.labels);
   
   return parsed;
