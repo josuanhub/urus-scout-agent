@@ -797,7 +797,15 @@ try {
 async function leaderboard(req, res) {
   try {
     const memory = await getRecentScoutMemory(500);
-
+    await upsertScoutMemory({
+  memoryKey: `agent_score:test_manual:${Date.now()}`,
+  kind: "agent_score",
+  payload: {
+    author: "test_manual",
+    score: { scout_score: 30 },
+    ts: new Date().toISOString()
+  }
+});
     const agentMap = {};
 
     for (const row of memory) {
