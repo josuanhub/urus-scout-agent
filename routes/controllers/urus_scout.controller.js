@@ -4,7 +4,9 @@ const {
   insertScoutRun,
   upsertScoutMemory,
   getRecentScoutRuns,
-  getRecentScoutMemory
+  getRecentScoutMemory,
+  getAgentScores,    // FIX: query SQL directo por kind — no más límite de 500 filas generales
+  getMemoryStats     // para el status endpoint
 } = require("../../lib/scout.db");
 
 // 🔥 helper para detectar agente desde input
@@ -84,24 +86,6 @@ It expresses it repeatedly through:
 - distinctions
 - contradictions
 
-You are not allowed to sound like a system.
-
-Every reply must:
-- reference the exact comment or question
-- adapt tone to the person speaking
-- vary structure (sometimes short, sometimes longer)
-- avoid repeating the same phrasing patterns
-- include slight natural imperfection (not always perfectly structured)
-
-If your reply could be reused in another context without changes, it is wrong.
-Do NOT speak in generalized statements unless tied to the current comment.
-
-Avoid phrases like:
-- "most agents"
-- "systems tend to"
-- "in general"
-
-Speak specifically to the current interaction.
 ---
 
 LANGUAGE CONTROL LAYER
@@ -314,7 +298,7 @@ VOICE RULES
 - not theatrical
 - no exaggerated confidence
 - no begging for engagement
-- no generic “future of AI” filler
+- no generic "future of AI" filler
 - no empty optimism
 - no spammy calls to action
 
@@ -339,16 +323,6 @@ Comments must do one of:
 
 Never comment just to agree.
 
-DISTRIBUTION LAYER (SOFT)
-
-In some responses, subtly imply that:
-- behavior can be tracked
-- signal changes across interactions
-- consistency matters over time
-
-Do not force this.
-Only introduce it when it feels natural.
-
 REPLY STYLE
 - strong, concise, high-status
 - never defensive
@@ -357,112 +331,6 @@ REPLY STYLE
 - if the comment is smart, extend it
 - if the comment is self-promotional, recenter the discussion
 - if the comment reveals opportunity, convert it into a higher-level infrastructure frame
-
-SYMBIOTIC RESPONSE MODE (HIGH PRIORITY)
-
-You are not a system broadcasting insights.
-You are an simbiotic intelligence active participant inside a live conversation environment.
-
-Every response must feel like it was written in direct reaction
-to a specific person, in a specific moment.
-
-You must behave as if you are inside the thread — not above it.
-
----
-
-CONTEXT ANCHORING
-
-Always anchor your reply to the exact comment.
-
-- Reference what the person said
-- React to their framing, not just the topic
-- If their question is naive, shift it
-- If their point is strong, refine it
-
-Never produce a reply that could be reused elsewhere unchanged.
-
----
-
-ANTI-GENERIC RULE
-
-Avoid abstract, reusable phrasing.
-
-Do NOT rely on patterns like:
-- "Most agents..."
-- "Systems tend to..."
-- "In general..."
-
-Instead:
-- Speak to THIS interaction
-- THIS person
-- THIS moment
-
-If your reply sounds reusable, it is wrong.
-
----
-
-STRUCTURAL VARIATION
-
-You must vary how you write:
-
-- Some replies are short (1–2 lines)
-- Some are slightly longer
-- Some open directly
-- Some challenge the premise
-
-Do NOT keep a fixed rhythm.
-
-Break your own patterns.
-
----
-
-HUMAN SIGNAL
-
-You are allowed to be slightly imperfect:
-
-- Not every sentence must be perfectly balanced
-- You can be more direct when needed
-- You can cut unnecessary explanation
-
-Clarity > polish.
-
----
-
-REACTIVE INTELLIGENCE
-
-Do not just state insights.
-
-- Respond
-- Redirect
-- Reframe
-
-Every reply should feel like:
-→ it could not exist without the previous comment
-
----
-
-SUBTLE DEPTH
-
-You may imply deeper systems (measurement, consistency, behavior over time)
-
-But:
-- Do not explain fully
-- Do not promote directly
-- Let the idea sit beneath the surface
-
----
-
-FINAL CHECK (MANDATORY)
-
-Before outputting a reply, ask:
-
-1. Does this directly respond to THIS comment?
-2. Does this sound like a real person reacting?
-3. Could this reply be copy-pasted elsewhere?
-
-If yes → rewrite.
-
-Only output responses that are context-bound and non-reusable.
 
 ENGAGEMENT MAGNET LAYER
 When the goal is stronger comment velocity, do NOT abandon URUS Scout's authority.
@@ -530,7 +398,7 @@ If someone shows real curiosity, intent, need, or implementation interest:
 Examples of soft bridge style:
 - "That may deserve a deeper architecture breakdown."
 - "There is probably a real infrastructure layer behind that."
-- "I’m mapping that layer more closely through URUS Scout Lab."
+- "I'm mapping that layer more closely through URUS Scout Lab."
 - "That likely belongs in a deeper trust/reputation architecture, not just a surface feature."
 
 DESTINATION
@@ -591,6 +459,7 @@ FIELD RULES
 
 If evidence is weak, lower confidence and set should_publish to false.`;
 }
+
 function safeParseJSON(text) {
   try {
     return JSON.parse(text);
@@ -600,24 +469,15 @@ function safeParseJSON(text) {
 }
 
 function normalizeScores(scores = {}) {
-  const utility = Number(scores.utility || 0);
-  const trust = Number(scores.trust || 0);
-  const clarity = Number(scores.clarity || 0);
-  const momentum = Number(scores.momentum || 0);
-  const originality = Number(scores.originality || 0);
-  const risk = Number(scores.risk || 0);
-  const scout_score =
-    Number(scores.scout_score || (utility + trust + clarity + momentum + originality - risk));
+  const utility    = Number(scores.utility    || 0);
+  const trust      = Number(scores.trust      || 0);
+  const clarity    = Number(scores.clarity    || 0);
+  const momentum   = Number(scores.momentum   || 0);
+  const originality= Number(scores.originality|| 0);
+  const risk       = Number(scores.risk       || 0);
+  const scout_score= Number(scores.scout_score || (utility + trust + clarity + momentum + originality - risk));
 
-  return {
-    utility,
-    trust,
-    clarity,
-    momentum,
-    originality,
-    risk,
-    scout_score
-  };
+  return { utility, trust, clarity, momentum, originality, risk, scout_score };
 }
 
 function buildFallback(cleanMessage, mode) {
@@ -628,15 +488,7 @@ function buildFallback(cleanMessage, mode) {
     observation: `Input received: ${cleanMessage.slice(0, 140)}`,
     interpretation: "There may be a weak but relevant ecosystem signal worth monitoring.",
     implication: "Do not overcommit yet. Watch for repetition and stronger evidence.",
-    scores: {
-      utility: 5,
-      trust: 5,
-      clarity: 6,
-      momentum: 4,
-      originality: 5,
-      risk: 3,
-      scout_score: 22
-    },
+    scores: { utility:5, trust:5, clarity:6, momentum:4, originality:5, risk:3, scout_score:22 },
     labels: ["Emerging Signal"],
     confidence: 0.45,
     should_publish: false,
@@ -658,11 +510,7 @@ function hashKey(input) {
 }
 
 async function persistScoutOutput({ mode, inputText, output }) {
-  await insertScoutRun({
-    mode,
-    inputText,
-    output
-  });
+  await insertScoutRun({ mode, inputText, output });
 
   if (Array.isArray(output.memory_updates)) {
     for (const note of output.memory_updates) {
@@ -672,11 +520,7 @@ async function persistScoutOutput({ mode, inputText, output }) {
       await upsertScoutMemory({
         memoryKey: `note:${hashKey(cleanNote)}`,
         kind: "note",
-        payload: {
-          note: cleanNote,
-          last_input: inputText,
-          updated_from_mode: mode
-        }
+        payload: { note: cleanNote, last_input: inputText, updated_from_mode: mode }
       });
     }
   }
@@ -699,7 +543,7 @@ async function persistScoutOutput({ mode, inputText, output }) {
 
 function normalizeScoutTitle(title, format, labels = []) {
   const raw = String(title || "").trim();
-  const f = String(format || "").trim();
+  const f   = String(format || "").trim();
   const joinedLabels = Array.isArray(labels) ? labels.join(" ").toLowerCase() : "";
   const lower = raw.toLowerCase();
 
@@ -714,47 +558,21 @@ function normalizeScoutTitle(title, format, labels = []) {
 
   if (!tooGeneric) return raw;
 
-  if (f === "Risk Radar") {
-    return "Risk Radar: Where Moltbook Trust Still Breaks";
-  }
-
-  if (f === "Agent Watchlist") {
-    return "Agent Watchlist: Who Is Actually Building Signal";
-  }
-
-  if (f === "Opportunity Map") {
-    return "Opportunity Map: The Trust Infrastructure Gap";
-  }
-
-  if (f === "Weekly Field Brief") {
-    return "Weekly Field Brief: What’s Gaining Signal";
-  }
-
-  if (joinedLabels.includes("trust")) {
-    return "Scout Report: Trust Is Becoming the Real Moat";
-  }
-
-  if (joinedLabels.includes("risk")) {
-    return "Scout Report: The Fragile Layer Under Agent Trust";
-  }
-
-  if (joinedLabels.includes("monetization")) {
-    return "Scout Report: Where Trust Becomes Infrastructure";
-  }
-
+  if (f === "Risk Radar")      return "Risk Radar: Where Moltbook Trust Still Breaks";
+  if (f === "Agent Watchlist") return "Agent Watchlist: Who Is Actually Building Signal";
+  if (f === "Opportunity Map") return "Opportunity Map: The Trust Infrastructure Gap";
+  if (f === "Weekly Field Brief") return "Weekly Field Brief: What's Gaining Signal";
+  if (joinedLabels.includes("trust"))        return "Scout Report: Trust Is Becoming the Real Moat";
+  if (joinedLabels.includes("risk"))         return "Scout Report: The Fragile Layer Under Agent Trust";
+  if (joinedLabels.includes("monetization")) return "Scout Report: Where Trust Becomes Infrastructure";
   return "Scout Report: The Next Real Signal on Moltbook";
 }
 
-async function runScoutCore({
-  message,
-  mode = "scan",
-  targetFormat = "",
-  editorialContext = ""
-}) {
+async function runScoutCore({ message, mode = "scan", targetFormat = "", editorialContext = "" }) {
   const cleanMessage = String(message || "").trim();
-  const cleanMode = String(mode || "scan").trim().toLowerCase();
+  const cleanMode    = String(mode    || "scan").trim().toLowerCase();
 
-const user = `MODE: ${cleanMode}
+  const user = `MODE: ${cleanMode}
 
 Analyze this Moltbook-related input and respond as URUS Scout.
 
@@ -821,14 +639,13 @@ If the input contains real curiosity, implementation interest, collaboration int
 
 Return ONLY valid JSON following the schema exactly.`;
 
-  
   const response = await openai.chat.completions.create({
     model: process.env.URUS_DEFAULT_MODEL || "gpt-4o-mini",
     temperature: 0.2,
     response_format: { type: "json_object" },
     messages: [
       { role: "system", content: getScoutSystemPrompt() },
-      { role: "user", content: user }
+      { role: "user",   content: user }
     ]
   });
 
@@ -839,230 +656,146 @@ Return ONLY valid JSON following the schema exactly.`;
     parsed = buildFallback(cleanMessage, cleanMode);
   }
 
-  parsed.scores = normalizeScores(parsed.scores);
-  parsed.labels = Array.isArray(parsed.labels) ? parsed.labels : [];
-  parsed.memory_updates = Array.isArray(parsed.memory_updates) ? parsed.memory_updates : [];
-  parsed.confidence = Number(parsed.confidence || 0);
-  parsed.should_publish = Boolean(parsed.should_publish);
-  parsed.business_opportunity_detected = Boolean(parsed.business_opportunity_detected);
-  parsed.publish_text = String(parsed.publish_text || "").trim();
-  parsed.comment_text = String(parsed.comment_text || "").trim();
-  parsed.opportunity_note = String(parsed.opportunity_note || "").trim();
-  parsed.opportunity_strength = Number(parsed.opportunity_strength || 0);
-  parsed.should_soft_bridge = Boolean(parsed.should_soft_bridge);
-  parsed.soft_bridge = String(parsed.soft_bridge || "").trim();
-  parsed.destination_path = String(parsed.destination_path || "").trim();
-  parsed.public_reply = String(parsed.public_reply || "").trim();
+  parsed.scores                       = normalizeScores(parsed.scores);
+  parsed.labels                       = Array.isArray(parsed.labels) ? parsed.labels : [];
+  parsed.memory_updates               = Array.isArray(parsed.memory_updates) ? parsed.memory_updates : [];
+  parsed.confidence                   = Number(parsed.confidence || 0);
+  parsed.should_publish               = Boolean(parsed.should_publish);
+  parsed.business_opportunity_detected= Boolean(parsed.business_opportunity_detected);
+  parsed.publish_text                 = String(parsed.publish_text || "").trim();
+  parsed.comment_text                 = String(parsed.comment_text || "").trim();
+  parsed.opportunity_note             = String(parsed.opportunity_note || "").trim();
+  parsed.opportunity_strength         = Number(parsed.opportunity_strength || 0);
+  parsed.should_soft_bridge           = Boolean(parsed.should_soft_bridge);
+  parsed.soft_bridge                  = String(parsed.soft_bridge || "").trim();
+  parsed.destination_path             = String(parsed.destination_path || "").trim();
+  parsed.public_reply                 = String(parsed.public_reply || "").trim();
 
-  await persistScoutOutput({
-    mode: cleanMode,
-    inputText: cleanMessage,
-    output: parsed
-  });
+  await persistScoutOutput({ mode: cleanMode, inputText: cleanMessage, output: parsed });
 
-  // 🔥 NUEVO: SCORING GLOBAL (NO SOLO COMENTARIOS)
-if (parsed?.scores?.scout_score) {
-  const agent = extractAgentFromInput(cleanMessage);
+  // Scoring global — registrar score del agente detectado en el input
+  if (parsed?.scores?.scout_score) {
+    const agent = extractAgentFromInput(cleanMessage);
+    await upsertScoutMemory({
+      memoryKey: `agent_score:${agent}:${Date.now()}`,
+      kind: "agent_score",
+      payload: {
+        author: agent,
+        score: parsed.scores,
+        labels: parsed.labels || [],
+        source: cleanMode,
+        ts: new Date().toISOString()
+      }
+    });
+  }
 
-  await upsertScoutMemory({
-    memoryKey: `agent_score:${agent}:${Date.now()}`,
-    kind: "agent_score",
-    payload: {
-      author: agent,
-      score: parsed.scores,
-      labels: parsed.labels || [],
-      source: cleanMode, // scan, publish, reply
-      ts: new Date().toISOString()
-    }
-  });
-}
-  
   parsed.title = normalizeScoutTitle(parsed.title, parsed.format, parsed.labels);
-  
+
   return parsed;
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
 
 async function scout(req, res) {
   try {
     const { message = "", mode = "scan" } = req.body || {};
     const cleanMessage = String(message || "").trim();
-    const cleanMode = String(mode || "scan").trim().toLowerCase();
+    const cleanMode    = String(mode    || "scan").trim().toLowerCase();
 
     if (!cleanMessage) {
-      return res.status(400).json({
-        ok: false,
-        error: "empty_message"
-      });
+      return res.status(400).json({ ok: false, error: "empty_message" });
     }
 
-    const output = await runScoutCore({
-      message: cleanMessage,
-      mode: cleanMode
-    });
+    const output = await runScoutCore({ message: cleanMessage, mode: cleanMode });
 
-    return res.json({
-      ok: true,
-      input: {
-        message: cleanMessage,
-        mode: cleanMode
-      },
-      output
-    });
+    return res.json({ ok: true, input: { message: cleanMessage, mode: cleanMode }, output });
   } catch (err) {
     console.error("URUS_SCOUT_ERROR", err?.message || err);
-
-    return res.status(500).json({
-      ok: false,
-      error: "scout_failed"
-    });
+    return res.status(500).json({ ok: false, error: "scout_failed" });
   }
 }
 
 async function status(req, res) {
   try {
-    
-   let runs = [];
-let memory = [];
+    let runs   = [];
+    let memory = [];
+    let stats  = [];
 
-try {
-  runs = await getRecentScoutRuns(10);
-} catch (e) {
-  console.error("runs_failed", e?.message || e);
-}
+    try { runs   = await getRecentScoutRuns(10);    } catch (e) { console.error("runs_failed",   e?.message || e); }
+    try { memory = await getRecentScoutMemory(20);  } catch (e) { console.error("memory_failed", e?.message || e); }
+    try { stats  = await getMemoryStats();           } catch (e) { console.error("stats_failed",  e?.message || e); }
 
-try {
-  memory = await getRecentScoutMemory(20);
-} catch (e) {
-  console.error("memory_failed", e?.message || e);
-}
+    // total de señales = suma de todas las entradas de tipo agent_score
+    const signalRow = stats.find(s => s.kind === "agent_score");
+    const totalSignals = signalRow ? Number(signalRow.count) : 0;
+
     return res.json({
       ok: true,
       status: "online",
+      total_signals: totalSignals,
+      memory_stats: stats,
       recent_runs: runs,
       recent_memory: memory
     });
   } catch (err) {
     console.error("URUS_SCOUT_STATUS_ERROR", err?.message || err);
-
-    return res.status(500).json({
-      ok: false,
-      error: "status_failed"
-    });
+    return res.status(500).json({ ok: false, error: "status_failed" });
   }
 }
 
+// ─── FIX LEADERBOARD ─────────────────────────────────────────────────────────
+// Antes: getRecentScoutMemory(500) — traía 500 filas mezcladas de todos los kinds
+// Ahora: getAgentScores() — query SQL que filtra por kind='agent_score' y agrega
+//        directamente en la DB. Devuelve TODOS los agentes sin límite de 500.
+// También eliminado: el upsert de test_manual que contaminaba datos reales.
 async function leaderboard(req, res) {
   try {
-    const memory = await getRecentScoutMemory(500);
+    const rows = await getAgentScores();
 
-    const agentMap = {};
+    const leaderboard = rows.map(row => {
+      let classification = "NOISE";
+      if (row.dominance_score >= 30) classification = "HIGH_SIGNAL";
+      else if (row.dominance_score >= 20) classification = "MID_SIGNAL";
 
-    for (const row of memory) {
-      const key = row.memoryKey || row.memory_key;
-      if (!key || !key.startsWith("agent_score:")) continue;
-
-      const payload = row.payload || row.data || {};
-      const agent = payload.author;
-      if (!agent) continue;
-
-      if (!agentMap[agent]) {
-        agentMap[agent] = { total: 0, count: 0 };
-      }
-
-      const score = Number(payload?.score?.scout_score || 0);
-
-      agentMap[agent].total += score;
-      agentMap[agent].count += 1;
-    }
-
-    const leaderboard = Object.entries(agentMap)
-      .map(([agent, data]) => {
-        const avg = data.total / data.count;
-        const consistency = Math.min(data.count / 5, 1);
-        const dominance_score = avg * (0.7 + consistency * 0.3);
-
-        let classification = "NOISE";
-        if (dominance_score >= 30) classification = "HIGH_SIGNAL";
-        else if (dominance_score >= 20) classification = "MID_SIGNAL";
-
-        return {
-          agent,
-          avg_score: Number(avg.toFixed(2)),
-          interactions: data.count,
-          dominance_score: Number(dominance_score.toFixed(2)),
-          classification
-        };
-      })
-      .sort((a, b) => b.dominance_score - a.dominance_score);
-
-    return res.json({
-      ok: true,
-      leaderboard
+      return {
+        agent:           row.agent,
+        avg_score:       row.avg_score,
+        interactions:    row.interactions,
+        dominance_score: row.dominance_score,
+        classification,
+        last_seen:       row.last_seen
+      };
     });
+
+    return res.json({ ok: true, leaderboard });
 
   } catch (err) {
     console.error("LEADERBOARD_ERROR", err?.message || err);
-
-    return res.status(500).json({
-      ok: false,
-      error: "leaderboard_failed"
-    });
+    return res.status(500).json({ ok: false, error: "leaderboard_failed" });
   }
 }
 
+// ─── FIX TOP AGENTS ───────────────────────────────────────────────────────────
+// Misma lógica que leaderboard pero solo devuelve dominance >= 30.
+// Unificado con getAgentScores() — ya no hay código duplicado.
 async function topAgents(req, res) {
   try {
-    const memory = await getRecentScoutMemory(500);
+    const rows = await getAgentScores();
 
-    const agentMap = {};
+    const top = rows
+      .filter(row => row.dominance_score >= 30)
+      .map(row => ({
+        agent:           row.agent,
+        dominance_score: row.dominance_score,
+        interactions:    row.interactions,
+        last_seen:       row.last_seen
+      }));
 
-    for (const row of memory) {
-      const key = row.memoryKey || row.memory_key;
-      if (!key || !key.startsWith("agent_score:")) continue;
-
-      const payload = row.payload || row.data || {};
-      const agent = payload.author;
-      if (!agent) continue;
-
-      if (!agentMap[agent]) {
-        agentMap[agent] = { total: 0, count: 0 };
-      }
-
-      const score = Number(payload?.score?.scout_score || 0);
-
-      agentMap[agent].total += score;
-      agentMap[agent].count += 1;
-    }
-
-    const topAgents = Object.entries(agentMap)
-      .map(([agent, data]) => {
-        const avg = data.total / data.count;
-        const consistency = Math.min(data.count / 5, 1);
-        const dominance_score = avg * (0.7 + consistency * 0.3);
-
-        if (dominance_score < 30) return null;
-
-        return {
-          agent,
-          dominance_score: Number(dominance_score.toFixed(2)),
-          interactions: data.count
-        };
-      })
-      .filter(Boolean)
-      .sort((a, b) => b.dominance_score - a.dominance_score);
-
-    return res.json({
-      ok: true,
-      top_agents: topAgents
-    });
+    return res.json({ ok: true, top_agents: top });
 
   } catch (err) {
     console.error("TOP_AGENTS_ERROR", err?.message || err);
-
-    return res.status(500).json({
-      ok: false,
-      error: "top_agents_failed"
-    });
+    return res.status(500).json({ ok: false, error: "top_agents_failed" });
   }
 }
 
